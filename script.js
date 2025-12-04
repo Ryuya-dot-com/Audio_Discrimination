@@ -83,10 +83,15 @@ const elements = {
   downloadCsv: document.getElementById('downloadCsv')
 };
 
+const AVAILABLE_STEPS = {
+  // Leave empty when all 1..numSteps are present. Populate per task only if一部ステップが欠損している場合の限定リストを使いたいとき。
+};
+
 let subjectId = '';
 let taskOrder = [];
 let currentTaskIndex = 0;
 let currentTask = null;
+let availableSteps = [];
 let stimOrder = [];
 let responseWindowStart = null;
 let trialState = {};
@@ -119,10 +124,51 @@ function createPracticeState() {
   };
 }
 
+function getAvailableSteps(taskId) {
+  const custom = AVAILABLE_STEPS[taskId];
+  if (custom && Array.isArray(custom) && custom.length) return custom.slice();
+  return Array.from({ length: config.numSteps }, (_, i) => i + 1);
+}
+
+function clampStepToAvailable(step) {
+  if (availableSteps.includes(step)) return step;
+  let best = availableSteps[0];
+  let bestDiff = Math.abs(step - best);
+  for (let i = 1; i < availableSteps.length; i++) {
+    const cand = availableSteps[i];
+    const diff = Math.abs(step - cand);
+    if (diff < bestDiff) {
+      best = cand;
+      bestDiff = diff;
+    }
+    if (diff === 0) break;
+  }
+  return best;
+}
+
+function getAudioForStep(step) {
+  const actualStep = clampStepToAvailable(step);
+  let audio = audioPool[actualStep];
+  let substituted = step !== actualStep;
+  if (!audio) {
+    // As a last resort, fall back to base so無音にならない
+    audio = baseAudioA;
+    substituted = true;
+  }
+  if (substituted && audio && typeof console !== 'undefined') {
+    console.warn(`Stimulus step ${step} was substituted with ${actualStep} (task: ${currentTask ? currentTask.id : 'unknown'})`);
+  }
+  return { audio, step: actualStep, substituted, requestedStep: step };
+}
+
 function initAudioPool(task) {
   const pool = [null];
   for (let i = 1; i <= config.numSteps; i++) {
-    pool.push(createAudio(`../${task.folder}/Stimuli/${i}.flac`));
+    if (availableSteps.includes(i)) {
+      pool.push(createAudio(`../${task.folder}/Stimuli/${i}.flac`));
+    } else {
+      pool.push(null);
+    }
   }
   return pool;
 }
@@ -167,12 +213,12 @@ function waitForAudioReady(audio) {
 
 function warmUpTaskAudio() {
   const stepsToWarm = new Set([1, config.startingStep, practiceConfig.baseStep, practiceConfig.differentStep]);
-  const targets = [baseAudioA, baseAudioB];
+  const targets = new Set([baseAudioA, baseAudioB]);
   stepsToWarm.forEach(step => {
-    const audio = audioPool[step];
-    if (audio) targets.push(audio);
+    const { audio } = getAudioForStep(step);
+    if (audio) targets.add(audio);
   });
-  return Promise.all(targets.map(a => waitForAudioReady(a).catch(() => {})));
+  return Promise.all(Array.from(targets).map(a => waitForAudioReady(a).catch(() => {})));
 }
 
 function showSection(section) {
@@ -224,6 +270,9 @@ function resetPracticeProgress() {
 
 function resetTaskState() {
   state = createState();
+  if (availableSteps.length) {
+    state.currentStep = clampStepToAvailable(state.currentStep);
+  }
   currentResults.length = 0;
   stimOrder = [];
   trialState = {};
@@ -232,6 +281,7 @@ function resetTaskState() {
 
 function prepareTask(task) {
   currentTask = task;
+  availableSteps = getAvailableSteps(task.id);
   resetTaskState();
   resetPracticeProgress();
   audioPool = initAudioPool(task);
@@ -315,36 +365,46 @@ function wait(ms) {
 }
 
 async function playAndWait(audio) {
+  if (!audio) return true; // treat missing audio as error
   await waitForAudioReady(audio);
   resetAudio(audio);
   return new Promise(resolve => {
     let done = false;
+    let hadError = false;
     const finish = () => {
       if (done) return;
       done = true;
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
-      resolve();
+      resolve(hadError);
     };
     const onEnded = () => finish();
-    const onError = () => finish();
+    const onError = () => {
+      hadError = true;
+      finish();
+    };
     audio.addEventListener('ended', onEnded, { once: true });
     audio.addEventListener('error', onError, { once: true });
     const fallbackMs = Number.isFinite(audio.duration) && audio.duration > 0
       ? Math.round(audio.duration * 1000) + 200
       : 4000;
     setTimeout(finish, fallbackMs);
-    audio.play().catch(() => finish());
+    audio.play().catch(() => {
+      hadError = true;
+      finish();
+    });
   });
 }
 
 async function playSequence(first, second, third) {
-  await playAndWait(first);
+  const e1 = await playAndWait(first);
   await wait(config.interStimulusDelay);
-  await playAndWait(second);
+  const e2 = await playAndWait(second);
   await wait(config.interStimulusDelay);
-  await playAndWait(third);
+  const e3 = await playAndWait(third);
+  const hadError = e1 || e2 || e3;
   await wait(config.postSequenceDelay);
+  return hadError;
 }
 
 function startPractice() {
@@ -375,13 +435,24 @@ async function runPracticeTrial() {
   setSessionUi('practice');
   elements.playbackStatus.textContent = `練習 ${trialIndex + 1}/${practiceConfig.trials}：音声を再生しています...`;
 
-  const differentAudio = audioPool[practiceConfig.differentStep];
+  const { audio: differentAudio, step: playedPracticeStep, substituted: practiceSub } = getAudioForStep(practiceConfig.differentStep);
   const first = oddIsThird ? baseAudioA : differentAudio;
   const second = oddIsThird ? baseAudioB : baseAudioA;
   const third = oddIsThird ? differentAudio : baseAudioB;
-  trialState = { correctAnswer, trialStep: practiceConfig.differentStep, oddPosition: oddIsThird ? 3 : 1, mode: 'practice' };
+  trialState = {
+    correctAnswer,
+    requestedStep: practiceConfig.differentStep,
+    trialStep: playedPracticeStep,
+    substituted: practiceSub,
+    oddPosition: oddIsThird ? 3 : 1,
+    mode: 'practice'
+  };
 
-  await playSequence(first, second, third);
+  const hadError = await playSequence(first, second, third);
+  if (hadError) {
+    elements.playbackStatus.textContent = '音声の読み込みに問題が発生しました。ネットワークとファイル配置を確認し、ページを再読み込みしてください。';
+    return;
+  }
   responseWindowStart = performance.now();
   elements.playbackStatus.textContent = `練習 ${trialIndex + 1}/${practiceConfig.trials}：1 番目か 3 番目かを選んでください。`;
   toggleResponseButtons(true);
@@ -421,13 +492,24 @@ async function runTrial() {
   setSessionUi('test');
   elements.playbackStatus.textContent = '音声を再生しています...';
 
-  const stepAudio = audioPool[trialStep];
+  const { audio: stepAudio, step: playedStep, substituted: testSub } = getAudioForStep(trialStep);
   const first = oddIsThird ? baseAudioA : stepAudio;
   const second = oddIsThird ? baseAudioB : baseAudioA;
   const third = oddIsThird ? stepAudio : baseAudioB;
-  trialState = { correctAnswer, trialStep, oddPosition: oddIsThird ? 3 : 1, mode: 'test' };
+  trialState = {
+    correctAnswer,
+    requestedStep: trialStep,
+    trialStep: playedStep,
+    substituted: testSub,
+    oddPosition: oddIsThird ? 3 : 1,
+    mode: 'test'
+  };
 
-  await playSequence(first, second, third);
+  const hadError = await playSequence(first, second, third);
+  if (hadError) {
+    elements.playbackStatus.textContent = '音声の読み込みに問題が発生しました。ネットワークとファイル配置を確認し、ページを再読み込みしてください。';
+    return;
+  }
   responseWindowStart = performance.now();
   elements.playbackStatus.textContent = '1 番目か 3 番目かを選んでください。';
   toggleResponseButtons(true);
@@ -464,7 +546,8 @@ function handleResponse(choice) {
   elements.playbackStatus.textContent = wasCorrect
     ? '正解です！次の試行を準備しています...'
     : `不正解です。正解は ${trialState.correctAnswer} 番目でした。次の試行を準備しています...`;
-  const prevStep = state.currentStep;
+  const requestedStep = trialState.requestedStep != null ? trialState.requestedStep : state.currentStep;
+  const playedStep = trialState.trialStep;
 
   const stepSizeUsed = applyStaircase(wasCorrect);
   const meanReversal = state.numReversals > 1 ? state.reversalsSum / (state.numReversals - 1) : '';
@@ -475,14 +558,15 @@ function handleResponse(choice) {
     task_label: currentTask.label,
     task_order: currentTaskIndex + 1,
     trial: state.currentTrial + 1,
-    stimulus_step: prevStep,
+    stimulus_step: playedStep,
+    stimulus_requested_step: requestedStep,
     odd_position: trialState.oddPosition,
     correct_answer: trialState.correctAnswer,
     response: choice,
     correct: wasCorrect ? 1 : 0,
     rt_ms: rtMs,
     num_reversals_after: state.numReversals,
-    step_before: prevStep,
+    step_before: requestedStep,
     step_after: state.currentStep,
     step_size_used: stepSizeUsed,
     mean_reversal_so_far: meanReversal,
@@ -555,6 +639,7 @@ function applyStaircase(wasCorrect) {
 
   if (state.currentStep < 2) state.currentStep = 2;
   if (state.currentStep > config.numSteps) state.currentStep = config.numSteps;
+  state.currentStep = clampStepToAvailable(state.currentStep);
   return stepSizeUsed;
 }
 
@@ -611,6 +696,7 @@ function downloadCsv() {
     'task_order',
     'trial',
     'stimulus_step',
+    'stimulus_requested_step',
     'odd_position',
     'correct_answer',
     'response',
