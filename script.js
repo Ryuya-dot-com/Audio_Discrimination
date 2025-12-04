@@ -165,7 +165,7 @@ function initAudioPool(task) {
   const pool = [null];
   for (let i = 1; i <= config.numSteps; i++) {
     if (availableSteps.includes(i)) {
-      pool.push(createAudio(`../${task.folder}/Stimuli/${i}.flac`));
+      pool.push(createAudio(`./${task.folder}/Stimuli/${i}.flac`));
     } else {
       pool.push(null);
     }
@@ -285,8 +285,8 @@ function prepareTask(task) {
   resetTaskState();
   resetPracticeProgress();
   audioPool = initAudioPool(task);
-  baseAudioA = createAudio(`../${task.folder}/Stimuli/1.flac`);
-  baseAudioB = createAudio(`../${task.folder}/Stimuli/1.flac`);
+  baseAudioA = createAudio(`./${task.folder}/Stimuli/1.flac`);
+  baseAudioB = createAudio(`./${task.folder}/Stimuli/1.flac`);
   elements.startPractice.disabled = true;
   elements.practiceStatus.textContent = '音声を読み込んでいます...';
   warmupPromise = warmUpTaskAudio();
