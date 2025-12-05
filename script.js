@@ -156,7 +156,6 @@ function getAudioForStep(step) {
   let audio = audioPool[actualStep];
   let substituted = step !== actualStep;
   if (!audio) {
-    // As a last resort, fall back to base so無音にならない
     audio = baseAudioA;
     substituted = true;
   }
@@ -270,7 +269,7 @@ function renderOrderList() {
 function resetPracticeProgress() {
   practiceState = createPracticeState();
   elements.startTest.disabled = true;
-  elements.startTest.textContent = '練習完了後に本番開始 (スペースキーでも開始)';
+  elements.startTest.textContent = '練習完了後に本番開始';
   elements.practiceStatus.textContent = '練習を 5 回行ってから本番へ進みます。スペースキーまたは下のボタンで本番を開始できます。';
   elements.startPractice.disabled = false;
   elements.startPractice.textContent = '練習を開始';
@@ -302,7 +301,7 @@ function prepareTask(task) {
   warmupPromise.finally(() => {
     elements.startPractice.disabled = false;
     if (!practiceState.completed) {
-      elements.practiceStatus.textContent = '練習を 5 回行ってから本番へ進みます。スペースキーまたは下のボタンで本番を開始できます。';
+      elements.practiceStatus.textContent = '練習を 5 回行ってから本番へ進みます。';
     }
   });
   elements.taskTag.textContent = `タスク ${currentTaskIndex + 1}/${taskOrder.length} | 説明`;
@@ -550,7 +549,7 @@ function handleResponse(choice) {
       awaitingTestStart = true;
       elements.practiceStatus.textContent = '練習が完了しました。スペースキーまたは下のボタンで本番を開始してください。';
       elements.startTest.disabled = false;
-      elements.startTest.textContent = '本番を開始 (スペースキーでも開始)';
+      elements.startTest.textContent = '本番を開始';
       elements.startPractice.disabled = true;
       elements.startPractice.textContent = '練習は完了しました';
       setTimeout(() => {
