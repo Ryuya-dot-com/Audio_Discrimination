@@ -155,8 +155,8 @@
   <main>
     <section id="setup" class="card active">
       <div class="tag">Audio Discrimination Battery</div>
-      <h1>音声弁別テスト（4 種類）</h1>
-      <p>持続時間 / フォルマント / ピッチ / 立ち上がりの 4 タスクを 1 ページで連続実施します。ID を使って実施順をランダムに決めます。</p>
+      <h1>リスニングタスク（4 種類）</h1>
+      <p>内容の異なる 4 つのリスニングタスクを、ID に応じて固定された順序で 1 ページにまとめて実施します。</p>
       <div class="stack">
         <div>
           <label for="subjectId">受験者ID</label>
@@ -181,17 +181,17 @@
       <div class="tag" id="taskTag"></div>
       <h2 id="taskTitle">タスク名</h2>
       <p id="taskDetail" class="highlight"></p>
-      <p class="status">各試行では 3 つの音が流れます。必ず 1 番目か 3 番目のどちらかだけが異なります。</p>
+      <p class="status">各試行では 3 つの音が流れ、1 番目か 3 番目のどちらかだけが異なります。</p>
       <ul>
         <li>音声の再生後、異なる音だと思う番号を 1 または 3 から選択します。</li>
-        <li>練習では刺激 1 と 100（差が大きい音）を使用し、正誤フィードバックが表示されます。</li>
-        <li>練習を完了すると本番ボタンが有効になります。本番中はフィードバックのみ表示され、条件が自動調整されます。</li>
+        <li>練習は全 5 回でフィードバックが表示され、終了後にスペースキーまたはボタンで本番を開始します。</li>
+        <li>本番ではフィードバックや進捗インジケーターは表示されません。条件は自動調整されます。</li>
       </ul>
       <div class="button-row">
         <button id="startPractice">練習を開始</button>
-        <button id="startTest" disabled>本番を開始</button>
+        <button id="startTest" disabled>本番を開始 (スペースキーでも開始)</button>
       </div>
-      <p id="practiceStatus" class="status">まず練習を完了してください。（刺激 1 と 100 を使用）</p>
+      <p id="practiceStatus" class="status">練習を 5 回行ったら、スペースキーまたはボタンで本番を開始します。</p>
     </section>
 
     <section id="trial" class="card">

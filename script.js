@@ -2,33 +2,37 @@ const TASKS = [
   {
     id: 'duration',
     label: '持続時間の弁別',
+    displayLabel: 'リスニングタスク3',
     folder: 'duration_discrimination',
     csvName: 'duration_discrimination',
-    detail: '3 つの音のうち 1 つだけ長さが異なります。長さの違いに集中してください。',
+    displayDetail: 'リスニングタスク3: 3 つの音のうち 1 つだけが異なります。違うと思う音を選んでください。',
     thresholdLabel: '推定閾値 (リバーサル平均)'
   },
   {
     id: 'formant',
     label: 'フォルマントの弁別',
+    displayLabel: 'リスニングタスク2',
     folder: 'formant_discrimination',
     csvName: 'formant_discrimination',
-    detail: '1 つだけフォルマント（音色）が異なります。音質の違いに集中してください。',
+    displayDetail: 'リスニングタスク2: 3 つの音のうち 1 つだけが異なります。違うと思う音を選んでください。',
     thresholdLabel: '推定閾値 (折り返し平均)'
   },
   {
     id: 'pitch',
     label: 'ピッチの弁別',
+    displayLabel: 'リスニングタスク1',
     folder: 'pitch_discrimination',
     csvName: 'pitch_discrimination',
-    detail: '1 つだけ高さ（ピッチ）が異なります。音の高さの違いに集中してください。',
+    displayDetail: 'リスニングタスク1: 3 つの音のうち 1 つだけが異なります。違うと思う音を選んでください。',
     thresholdLabel: '推定閾値 (折り返し平均)'
   },
   {
     id: 'risetime',
     label: '立ち上がり時間の弁別',
+    displayLabel: 'リスニングタスク4',
     folder: 'risetime_discrimination',
     csvName: 'risetime_discrimination',
-    detail: '1 つだけ立ち上がり時間が異なります。音の立ち上がり方に集中してください。',
+    displayDetail: 'リスニングタスク4: 3 つの音のうち 1 つだけが異なります。違うと思う音を選んでください。',
     thresholdLabel: '推定閾値 (折り返し平均)'
   }
 ];
@@ -45,7 +49,7 @@ const config = {
 };
 
 const practiceConfig = {
-  trials: 3,
+  trials: 5,
   baseStep: 1,
   differentStep: 100
 };
@@ -101,6 +105,7 @@ let baseAudioB = null;
 let warmupPromise = null;
 let state = createState();
 let practiceState = createPracticeState();
+let awaitingTestStart = false;
 const currentResults = [];
 const allResults = [];
 const taskSummaries = [];
@@ -257,7 +262,7 @@ function renderOrderList() {
   elements.orderList.innerHTML = '';
   taskOrder.forEach((task, index) => {
     const li = document.createElement('li');
-    li.textContent = task.label;
+    li.textContent = task.displayLabel;
     elements.orderList.appendChild(li);
   });
 }
@@ -265,7 +270,11 @@ function renderOrderList() {
 function resetPracticeProgress() {
   practiceState = createPracticeState();
   elements.startTest.disabled = true;
-  elements.practiceStatus.textContent = 'まず練習を完了してください。（刺激 1 と 100 を使用）';
+  elements.startTest.textContent = '練習完了後に本番開始 (スペースキーでも開始)';
+  elements.practiceStatus.textContent = '練習を 5 回行ってから本番へ進みます。スペースキーまたは下のボタンで本番を開始できます。';
+  elements.startPractice.disabled = false;
+  elements.startPractice.textContent = '練習を開始';
+  awaitingTestStart = false;
 }
 
 function resetTaskState() {
@@ -293,12 +302,12 @@ function prepareTask(task) {
   warmupPromise.finally(() => {
     elements.startPractice.disabled = false;
     if (!practiceState.completed) {
-      elements.practiceStatus.textContent = 'まず練習を完了してください。（刺激 1 と 100 を使用）';
+      elements.practiceStatus.textContent = '練習を 5 回行ってから本番へ進みます。スペースキーまたは下のボタンで本番を開始できます。';
     }
   });
   elements.taskTag.textContent = `タスク ${currentTaskIndex + 1}/${taskOrder.length} | 説明`;
-  elements.taskTitle.textContent = task.label;
-  elements.taskDetail.textContent = task.detail;
+  elements.taskTitle.textContent = task.displayLabel;
+  elements.taskDetail.textContent = task.displayDetail;
   elements.feedback.textContent = '';
   elements.feedback.classList.remove('correct', 'incorrect');
   showSection('instructions');
@@ -308,14 +317,16 @@ function setSessionUi(mode) {
   const prefix = `タスク ${currentTaskIndex + 1}/${taskOrder.length}`;
   if (mode === 'practice') {
     elements.sessionTag.textContent = `${prefix} | 練習`;
-    elements.trialHeading.textContent = `${currentTask.label} - 練習`;
+    elements.trialHeading.textContent = `${currentTask.displayLabel} - 練習`;
     elements.trialPrompt.textContent = 'はっきり異なる音です。1 番目か 3 番目を選んでください。';
+    elements.taskProgress.style.display = 'inline-flex';
     elements.taskProgress.textContent = `${prefix} | 練習 ${practiceState.currentTrial + 1}/${practiceConfig.trials}`;
   } else {
     elements.sessionTag.textContent = `${prefix} | 本番`;
-    elements.trialHeading.textContent = `${currentTask.label} - 本番`;
+    elements.trialHeading.textContent = `${currentTask.displayLabel} - 本番`;
     elements.trialPrompt.textContent = 'どの音が異なるでしょうか？ (1 または 3)';
-    elements.taskProgress.textContent = `${prefix} | 本番 ${state.currentTrial + 1}/${config.maxTrials}`;
+    elements.taskProgress.style.display = 'none';
+    elements.taskProgress.textContent = '';
   }
   elements.playbackStatus.textContent = '音声を再生しています...';
 }
@@ -415,7 +426,7 @@ function startPractice() {
   practiceState.order = buildPracticeOrder(practiceConfig.trials);
   practiceState.completed = false;
   elements.startTest.disabled = true;
-  elements.practiceStatus.textContent = '練習中です。音声の再生後に 1 か 3 を選んでください。';
+  elements.practiceStatus.textContent = `練習中です（全 ${practiceConfig.trials} 回）。音声の再生後に 1 か 3 を選んでください。`;
   setSessionUi('practice');
   clearFeedback();
   showSection('trial');
@@ -460,12 +471,17 @@ async function runPracticeTrial() {
 
 async function startExperiment() {
   if (!practiceState.completed) {
-    elements.practiceStatus.textContent = '本番を開始する前に練習を完了してください。';
+    elements.practiceStatus.textContent = `本番を開始する前に練習（全 ${practiceConfig.trials} 回）を完了してください。`;
     return;
   }
+  if (!awaitingTestStart) return;
   if (warmupPromise) {
     await warmupPromise;
   }
+  awaitingTestStart = false;
+  elements.startTest.disabled = true;
+  elements.startTest.textContent = '本番を準備しています...';
+  elements.practiceStatus.textContent = '本番を準備しています...';
   resetTaskState();
   stimOrder = buildStimOrder();
   setSessionUi('test');
@@ -531,9 +547,14 @@ function handleResponse(choice) {
     practiceState.currentTrial += 1;
     if (practiceState.currentTrial >= practiceConfig.trials) {
       practiceState.completed = true;
-      elements.practiceStatus.textContent = '練習が完了しました。本番を開始できます。';
+      awaitingTestStart = true;
+      elements.practiceStatus.textContent = '練習が完了しました。スペースキーまたは下のボタンで本番を開始してください。';
       elements.startTest.disabled = false;
+      elements.startTest.textContent = '本番を開始 (スペースキーでも開始)';
+      elements.startPractice.disabled = true;
+      elements.startPractice.textContent = '練習は完了しました';
       setTimeout(() => {
+        elements.playbackStatus.textContent = 'スペースキーを押すか下のボタンで本番を開始してください。';
         clearFeedback();
         showSection('instructions');
       }, config.postResponseDelay);
@@ -543,9 +564,8 @@ function handleResponse(choice) {
     return;
   }
 
-  elements.playbackStatus.textContent = wasCorrect
-    ? '正解です！次の試行を準備しています...'
-    : `不正解です。正解は ${trialState.correctAnswer} 番目でした。次の試行を準備しています...`;
+  elements.playbackStatus.textContent = '次の試行を準備しています...';
+  clearFeedback();
   const requestedStep = trialState.requestedStep != null ? trialState.requestedStep : state.currentStep;
   const playedStep = trialState.trialStep;
 
@@ -573,7 +593,6 @@ function handleResponse(choice) {
     threshold_estimate: ''
   });
 
-  setFeedback(wasCorrect ? '正解です！' : `不正解です。正解は ${trialState.correctAnswer} 番目でした。`, wasCorrect);
   state.currentTrial += 1;
   responseWindowStart = null;
   setTimeout(nextTrial, config.postResponseDelay);
@@ -655,7 +674,7 @@ function concludeTask() {
     threshold
   });
 
-  elements.completeTitle.textContent = `${currentTask.label} が完了しました`;
+  elements.completeTitle.textContent = `${currentTask.displayLabel} が完了しました`;
   elements.thresholdText.textContent = threshold !== null
     ? `${currentTask.thresholdLabel}: ${threshold.toFixed(2)}`
     : `${currentTask.thresholdLabel}: まだ安定していないため計算できませんでした。`;
@@ -664,7 +683,7 @@ function concludeTask() {
   const nextTask = taskOrder[currentTaskIndex + 1];
   elements.taskCompleteHint.textContent = isLastTask
     ? 'すべてのタスクが終わりました。結果を確認してください。'
-    : `次は「${nextTask.label}」です。準備ができたら進んでください。`;
+    : `次は「${nextTask.displayLabel}」です。準備ができたら進んでください。`;
   elements.nextTaskButton.textContent = isLastTask ? '結果を見る' : '次のタスクへ';
   elements.nextTaskButton.onclick = () => {
     if (isLastTask) {
@@ -733,7 +752,7 @@ function renderSummary() {
       : `${summary.task.thresholdLabel}: 計算できませんでした`;
     div.innerHTML = `
       <div class="pill">タスク ${summary.order}</div>
-      <div><strong>${summary.task.label}</strong></div>
+      <div><strong>${summary.task.displayLabel}</strong></div>
       <div class="status">${thresholdText}</div>
     `;
     elements.summaryList.appendChild(div);
@@ -773,3 +792,10 @@ elements.startTest.addEventListener('click', () => {
 elements.choose1.addEventListener('click', () => handleResponse('1'));
 elements.choose3.addEventListener('click', () => handleResponse('3'));
 elements.downloadCsv.addEventListener('click', downloadCsv);
+
+document.addEventListener('keydown', event => {
+  if (event.code === 'Space' && awaitingTestStart) {
+    event.preventDefault();
+    startExperiment();
+  }
+});
