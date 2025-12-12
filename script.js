@@ -5,7 +5,7 @@ const TASKS = [
     displayLabel: 'リスニングタスク3',
     folder: 'duration_discrimination',
     csvName: 'duration_discrimination',
-    displayDetail: 'リスニングタスク3: 3 つの音のうち 1 つだけが異なります。違うと思う音を選んでください。',
+    displayDetail: 'リスニングタスク3: 3 つの音が連続して流れます。1 番目か 3 番目のどちらかだけが他の音と異なります。違うと思う音を選んでください。',
     thresholdLabel: '推定閾値 (リバーサル平均)'
   },
   {
@@ -14,7 +14,7 @@ const TASKS = [
     displayLabel: 'リスニングタスク2',
     folder: 'formant_discrimination',
     csvName: 'formant_discrimination',
-    displayDetail: 'リスニングタスク2: 3 つの音のうち 1 つだけが異なります。違うと思う音を選んでください。',
+    displayDetail: 'リスニングタスク2: 3 つの音が連続して流れます。1 番目か 3 番目のどちらかだけが他の音と異なります。違うと思う音を選んでください。',
     thresholdLabel: '推定閾値 (折り返し平均)'
   },
   {
@@ -23,7 +23,7 @@ const TASKS = [
     displayLabel: 'リスニングタスク1',
     folder: 'pitch_discrimination',
     csvName: 'pitch_discrimination',
-    displayDetail: 'リスニングタスク1: 3 つの音のうち 1 つだけが異なります。違うと思う音を選んでください。',
+    displayDetail: 'リスニングタスク1: 3 つの音が連続して流れます。1 番目か 3 番目のどちらかだけが他の音と異なります。違うと思う音を選んでください。',
     thresholdLabel: '推定閾値 (折り返し平均)'
   },
   {
@@ -32,7 +32,7 @@ const TASKS = [
     displayLabel: 'リスニングタスク4',
     folder: 'risetime_discrimination',
     csvName: 'risetime_discrimination',
-    displayDetail: 'リスニングタスク4: 3 つの音のうち 1 つだけが異なります。違うと思う音を選んでください。',
+    displayDetail: 'リスニングタスク4: 3 つの音が連続して流れます。1 番目か 3 番目のどちらかだけが他の音と異なります。違うと思う音を選んでください。',
     thresholdLabel: '推定閾値 (折り返し平均)'
   }
 ];
@@ -156,6 +156,7 @@ function getAudioForStep(step) {
   let audio = audioPool[actualStep];
   let substituted = step !== actualStep;
   if (!audio) {
+    // As a last resort, fall back to base so無音にならない
     audio = baseAudioA;
     substituted = true;
   }
@@ -269,7 +270,7 @@ function renderOrderList() {
 function resetPracticeProgress() {
   practiceState = createPracticeState();
   elements.startTest.disabled = true;
-  elements.startTest.textContent = '練習完了後に本番開始';
+  elements.startTest.textContent = '練習完了後に本番開始 (スペースキーでも開始)';
   elements.practiceStatus.textContent = '練習を 5 回行ってから本番へ進みます。スペースキーまたは下のボタンで本番を開始できます。';
   elements.startPractice.disabled = false;
   elements.startPractice.textContent = '練習を開始';
@@ -301,7 +302,7 @@ function prepareTask(task) {
   warmupPromise.finally(() => {
     elements.startPractice.disabled = false;
     if (!practiceState.completed) {
-      elements.practiceStatus.textContent = '練習を 5 回行ってから本番へ進みます。';
+      elements.practiceStatus.textContent = '練習を 5 回行ってから本番へ進みます。スペースキーまたは下のボタンで本番を開始できます。';
     }
   });
   elements.taskTag.textContent = `タスク ${currentTaskIndex + 1}/${taskOrder.length} | 説明`;
@@ -323,7 +324,7 @@ function setSessionUi(mode) {
   } else {
     elements.sessionTag.textContent = `${prefix} | 本番`;
     elements.trialHeading.textContent = `${currentTask.displayLabel} - 本番`;
-    elements.trialPrompt.textContent = 'どの音が異なるでしょうか？ (1 または 3)';
+    elements.trialPrompt.textContent = 'どちらの音が異なるでしょうか？ (1または3)';
     elements.taskProgress.style.display = 'none';
     elements.taskProgress.textContent = '';
   }
@@ -549,7 +550,7 @@ function handleResponse(choice) {
       awaitingTestStart = true;
       elements.practiceStatus.textContent = '練習が完了しました。スペースキーまたは下のボタンで本番を開始してください。';
       elements.startTest.disabled = false;
-      elements.startTest.textContent = '本番を開始';
+      elements.startTest.textContent = '本番を開始 (スペースキーでも開始)';
       elements.startPractice.disabled = true;
       elements.startPractice.textContent = '練習は完了しました';
       setTimeout(() => {
@@ -733,7 +734,8 @@ function downloadCsv() {
     lines.push(line);
   });
 
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const bom = '\ufeff'; // UTF-8 BOM を付与し Excel などでの文字化けを防ぐ
+  const blob = new Blob([bom, lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   const filenameId = subjectId ? subjectId : 'subject';
